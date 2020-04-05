@@ -1,0 +1,24 @@
+;COUNT_ELEMENT_MISMATCH
+;======================
+
+(defun count_element_mismatch_tlist (A B)
+       (if (endp A)
+       	   0
+	   (if (equal (car A) (car B))
+	       (count_element_mismatch_tlist (cdr A) (cdr B))
+	       (+ 1 (count_element_mismatch_tlist (cdr A) (cdr B))))))
+	       
+;----------------------------------------------------------------------
+;THEOREMS
+
+(defthm count-mistmatch-in-equal-lists-tlist
+	(implies (true-listp lst)
+		 (equal (count_element_mismatch_tlist lst lst)
+		 	0)))
+
+(defthm count-mismatch-append-tlist
+	(implies (and (true-listp A)
+		      (true-listp B)
+		      (true-listp C))
+		 (equal (count_element_mismatch_tlist (append A B) (append A C))
+		 	(count_element_mismatch_tlist B C))))

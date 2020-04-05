@@ -1,0 +1,32 @@
+;COUNT_ELEMENT_MISMATCH
+;=======================
+;Function to count number of places two lists differ in
+
+(defun count_element_mismatch (A B)
+       (if (endp A)
+       	   0
+	   (cond ((equal (car A) (car B))
+	       	 	 (count_element_mismatch (cdr A) (cdr B)))
+	         ((and (not (equal (car (car A)) (car (car B))))
+		       (equal (cdr (car A)) (cdr (car B))))
+		      	 (+ 1 (count_element_mismatch (cdr A) (cdr B))))
+		 ((and (equal (car (car A)) (car (car B)))
+		       (not (equal (cdr (car A)) (cdr (car B)))))
+		      	 (+ 1 (count_element_mismatch (cdr A) (cdr B))))
+		 (t
+			 (+ 2 (count_element_mismatch (cdr A) (cdr B)))))))
+
+;--------------------------------------------------------------------------
+;THEOREMS
+
+(defthm count-mistmatch-in-equal-lists
+	(implies (alistp lst)
+		 (equal (count_element_mismatch lst lst)
+		 	0)))
+
+(defthm count-mismatch-append
+	(implies (and (alistp A)
+		      (alistp B)
+		      (alistp C))
+		 (equal (count_element_mismatch (append A B) (append A C))
+		 	(count_element_mismatch B C))))

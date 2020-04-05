@@ -1,0 +1,58 @@
+;ERROR INJECTION:
+;=================
+
+(defun bit_flip_tlist (n lst)
+       (declare (xargs :guard (and (integerp n)
+       		       	      	   (true-listp lst))
+		       :verify-guards nil))
+
+       (if (zp n)
+       	   (append (list (not (car lst))) (cdr lst))
+	   (append (list (car lst)) (bit_flip_tlist (- n 1) (cdr lst)))))
+
+;n: location in codeword
+;lst: codeword
+
+;---------------------------------------------------------------------------
+;THEOREMS
+
+(defthm single-bit-flips-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst)
+		      (not (endp lst)))
+		 (equal 
+		 	(count_element_mismatch_tlist
+				lst
+				(bit_flip_tlist n lst))
+			1)))
+
+(defthm len-bit-flip-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst))
+		 (equal (len lst)
+		 	(len (bit_flip_tlist n lst)))))
+
+(defthm list-change-after-flip-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst))
+		 (not (equal lst (bit_flip_tlist n lst)))))
+
+(defthm append-bit-flip-tlist
+	(implies (and (true-listp A)
+		      (>= n 0)
+		      (< n (len A)))
+		 (equal (append (bit_flip_tlist n A) B)
+		 	(bit_flip_tlist n (append A B))))
+	:hints (("Goal" :in-theory (disable len-bit-flip-tlist))))
+
+(defthm cons-bit-flip-tlist
+	(implies (and (true-listp lst)
+		      (booleanp A)
+		      (not (zp n))
+		      (> n 0)
+		      (<= n (len lst)))
+		 (equal (bit_flip_tlist n (cons A lst))
+		 	(cons A (bit_flip_tlist (- n 1) lst)))))

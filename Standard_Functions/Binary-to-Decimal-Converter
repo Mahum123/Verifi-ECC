@@ -1,0 +1,19 @@
+;4-bits Binary to Decimal Function
+;==================================
+
+(defun bin_to_dec (a b c d)
+       (+ (if d 1 0)
+       	  (if c 2 0)
+	  (if b 4 0)
+	  (if a 8 0)))
+
+;------------------------------------
+;THEOREMS
+
+(defthm even-binary-number
+	(implies (equal d nil)
+		 (evenp (bin_to_dec a b c d))))
+
+(defthm odd-binary-number
+	(implies (equal d t)
+		 (oddp (bin_to_dec a b c d))))

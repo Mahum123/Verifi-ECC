@@ -1,0 +1,772 @@
+;Load Function (Read byte from a memory location)
+;================================================
+
+(defun load_byte (n mem)
+       (declare (xargs :guard (and (integerp n)
+       		       	      	   (alistp mem))
+		       :verify-guards nil))
+
+       (if (zp n)
+       	   (car mem)
+	   (load_byte (- n 1) (cdr mem))))
+
+;n: memory location
+;mem: association list containing bytes of data
+
+
+;Store Function (Write byte from a memory location)
+;==================================================
+
+(defun store_byte (n mem byte)
+       (declare (xargs :guard (and (integerp n)
+       		       	      	   (alistp mem)
+				   (true-listp byte))
+		       :verify-guards nil))
+
+       (if (zp n)
+       	   (cons byte (cdr mem))
+	   (cons (car mem) (store_byte (- n 1) (cdr mem) byte))))
+
+;n: memory location
+;mem: association list containing bytes of data
+;byte: byte of data to write in memory at location n
+;;Function returns the updated memory model
+
+;Creating recognizer for alistp of byte
+(defun byte-alistp (mem)
+           (declare (xargs :guard t))
+           (cond ((atom mem) (eq mem nil))
+                 (t (and (consp (car mem))
+                         (equal (len (car mem)) 8)
+                         (byte-alistp (cdr mem))))))
+
+;------------------------------------------------------------------
+
+;Check Properties
+;================
+
+;Theorem: retrieving stored byte doesn't change change byte
+(defthm load-store
+	(implies (and (< n (len mem))
+		      (byte-alistp mem)
+		      (equal (len byte) 8))
+		 (equal (load_byte n (store_byte n mem byte))
+		 	byte)))
+
+;Theorem: overwriting a byte
+(defthm overwrite
+	(implies (and (< n (len mem))
+		      (byte-alistp mem)
+		      (equal (len byte1) 8)
+		      (equal (len byte2) 8))
+
+		 (equal (store_byte n (store_byte n mem byte1) byte2)
+		 	(store_byte n mem byte2))))
+
+;Theorem: storing new data changes memory
+(defthm store-changes-mem
+	(implies (and (< n (len mem))
+		      (byte-alistp mem)
+		      (equal (len byte) 8)
+		      (not (equal byte (load_byte n mem))))
+		 (not (equal mem (store_byte n mem byte)))))
+
+;Theorem: Copying-Pasting data from one memory location to other does not changes data
+(defthm copy-paste-in-mem
+	(implies (and (< n1 (len mem))
+		      (< n2 (len mem))
+		      (not (equal n1 n2))
+		      (byte-alistp mem)
+		      (equal (len  (load_byte n1 mem)) 8))
+
+		 (equal (load_byte n1 mem)
+		 	(load_byte n2 (store_byte n2 mem (load_byte n1 mem)))))
+	:hints (("Goal" :in-theory (disable load_byte store_byte))))
+
+;Theorem: Copying-Pasting data from one memory to other doesnot changes data
+(defthm copy-paste-between-mems
+	(implies (and (< n1 (len mem1))
+		      (< n2 (len mem2))
+		      (byte-alistp mem1)
+		      (byte-alistp mem2)
+		      (equal (len byte) 8))
+		      
+		 (equal (load_byte n1 (store_byte n1 mem1 byte))
+		 	(load_byte n2 (store_byte n2 mem2 byte))))
+	:hints (("Goal" :in-theory (disable load_byte store_byte))))
+
+
+
+
+
+;Binary to Decimal Function
+;==========================
+(defun bin_to_dec (a b c d)
+       (+ (if d 1 0)
+       	  (if c 2 0)
+	  (if b 4 0)
+	  (if a 8 0)))
+
+;------------------------------------
+;THEOREMS
+
+(defthm even-binary-number
+	(implies (equal d nil)
+		 (evenp (bin_to_dec a b c d))))
+
+(defthm odd-binary-number
+	(implies (equal d t)
+		 (oddp (bin_to_dec a b c d))))
+
+
+
+
+
+;COUNT_ELEMENT_MISMATCH
+;======================
+
+(defun count_element_mismatch_tlist (A B)
+       (if (endp A)
+       	   0
+	   (if (equal (car A) (car B))
+	       (count_element_mismatch_tlist (cdr A) (cdr B))
+	       (+ 1 (count_element_mismatch_tlist (cdr A) (cdr B))))))
+	       
+;----------------------------------------------------------------------
+;THEOREMS
+
+(defthm count-mistmatch-in-equal-lists-tlist
+	(implies (true-listp lst)
+		 (equal (count_element_mismatch_tlist lst lst)
+		 	0)))
+
+(defthm count-mismatch-append-tlist
+	(implies (and (true-listp A)
+		      (true-listp B)
+		      (true-listp C))
+		 (equal (count_element_mismatch_tlist (append A B) (append A C))
+		 	(count_element_mismatch_tlist B C))))
+
+
+
+
+
+;ERROR INJECTION:
+;=================
+
+(defun bit_flip_tlist (n lst)
+       (declare (xargs :guard (and (integerp n)
+       		       	      	   (true-listp lst))
+		       :verify-guards nil))
+
+       (if (zp n)
+       	   (append (list (not (car lst))) (cdr lst))
+	   (append (list (car lst)) (bit_flip_tlist (- n 1) (cdr lst)))))
+
+;n: location in codeword
+;lst: codeword
+
+;---------------------------------------------------------------------------
+;THEOREMS
+
+(defthm single-bit-flips-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst)
+		      (not (endp lst)))
+		 (equal 
+		 	(count_element_mismatch_tlist
+				lst
+				(bit_flip_tlist n lst))
+			1)))
+
+(defthm len-bit-flip-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst))
+		 (equal (len lst)
+		 	(len (bit_flip_tlist n lst)))))
+
+(defthm list-change-after-flip-tlist
+	(implies (and (>= n 0)
+		      (< n (len lst))
+		      (true-listp lst))
+		 (not (equal lst (bit_flip_tlist n lst)))))
+
+(defthm append-bit-flip-tlist
+	(implies (and (true-listp A)
+		      (>= n 0)
+		      (< n (len A)))
+		 (equal (append (bit_flip_tlist n A) B)
+		 	(bit_flip_tlist n (append A B))))
+	:hints (("Goal" :in-theory (disable len-bit-flip-tlist))))
+
+(defthm cons-bit-flip-tlist
+	(implies (and (true-listp lst)
+		      (booleanp A)
+		      (not (zp n))
+		      (> n 0)
+		      (<= n (len lst)))
+		 (equal (bit_flip_tlist n (cons A lst))
+		 	(cons A (bit_flip_tlist (- n 1) lst)))))
+
+
+
+
+
+;Hamming SEC-DED (7,4)
+;=====================
+
+;HAMMING (7,4) ENCODER
+(defun hamming7-4-encode (x3 x5 x6 x7)
+       (append (list (xor (xor x3 x5) x7))
+       	       (list (xor (xor x3 x6) x7))
+	       (list x3)
+	       (list (xor (xor x5 x6) x7))
+	       (list x5)
+	       (list x6)
+	       (list x7)
+	       (list (xor
+			(xor
+			   (xor
+			      (xor
+				 (xor
+				    (xor
+				       (xor (xor x3 x5) x7)  ;=x1
+				       (xor (xor x3 x6) x7)) ;=x2
+				  x3)
+			      (xor (xor x5 x6) x7))	     ;=x4
+			   x5)
+			x6)
+		     x7))))
+
+;Parity bits for single-error correction: x1, x2, x4
+;Parity bit for double-error detection: x8
+
+;HAMMING (7,4) DECODER
+(defun hamming7-4-decode (x1 x2 x3 x4 x5 x6 x7 x8)
+
+       ;SINGLE ERROR CONDITION
+       (cond ((and (xor x8
+       	   	     	(xor (xor (xor (xor (xor (xor x1 x2) x3) x4) x5) x6) x7)) ;x8 flipped
+	   	   (not (equal 0 (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7))
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))))))
+					    ;error location not zero
+				       
+	      (if (or (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7))
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 1)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 2)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 4)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 8)) 
+		  (list x3 x5 x6 x7) ;error was in parity bit
+	       	  (cond ((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				3)
+			 (list (not x3) x5 x6 x7))	
+			((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				5)
+			 (list x3 (not x5) x6 x7))
+			((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				6)
+			 (list x3 x5 (not x6) x7))
+			(t
+			 (list x3 x5 x6 (not x7))))))
+
+
+       ;DOUBLE ERROR CONDITION
+             ((and (not (xor x8
+       	   	     	(xor (xor (xor (xor (xor (xor x1 x2) x3) x4) x5) x6) x7))) ;x8 not flipped
+	   	   (not (equal 0 (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))))))
+					    ;error location not zero
+	      (msg "Double-Bit Error Detected"))
+
+
+       ;NO ERROR CONDITION
+             (t (list x3 x5 x6 x7))))
+
+;-------------------------------------------------------------------------------------
+;THEOREMS
+
+;Theorem: Hamming Distance=4
+(defthm hamm_distance4
+	(implies (not (equal
+		      (bin_to_dec a b c d)
+      		      (bin_to_dec e f g h)))
+		 (>= (count_element_mismatch_tlist
+				(hamming7-4-encode a b c d)
+		     		(hamming7-4-encode e f g h))
+		     4)))
+
+;Theorems: Encoder and Decoder give same output in no error condition
+(defthm hamm-NO-ERROR1
+	(implies
+		(equal (count_element_mismatch_tlist (hamming7-4-encode x3 x5 x6 x7)
+		       		 	       	     (list x1 x2 x3 x4 x5 x6 x7 x8))
+			0)
+		(equal (hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8)
+		       (list x3 x5 x6 x7))
+		))
+
+(defthm hamm-NO-ERROR2
+	(implies
+		(equal (hamming7-4-encode x3 x5 x6 x7)
+		       (list x1 x2 x3 x4 x5 x6 x7 x8))
+		(equal (hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8)
+		       (list x3 x5 x6 x7))))
+
+;Theorems: Single Errors are Corrected
+(defthm hamm-SEC1
+	(implies (equal 1
+		 	(count_element_mismatch_tlist
+					(hamming7-4-encode x3 x5 x6 x7)
+		       	 	   	(list x1 x2 x3 x4 x5 x6 x7 x8)));single bit flip
+	    	 (equal (list x3 x5 x6 x7)
+			(hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8))))
+			;output will be corrected code
+;(Weak theorem: only checks for error in parity bit)
+
+(defthm hamm-SEC2     
+	(implies (and (booleanp a)
+		      (booleanp b)
+		      (booleanp c)
+		      (booleanp d)
+ 		 (equal (hamming7-4-encode a b c d)
+		        (list e f g h i j k l)))
+	(and (equal (hamming7-4-decode e f (not g) h i j k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h (not i) j k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h i (not j) k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h i j (not k) l)
+	       	    (list a b c d)))))
+
+
+;Theorem: Double Errors are Detected
+(defthm hamm-DED     
+	(implies (and (booleanp a)
+		      (booleanp b)
+		      (booleanp c)
+		      (booleanp d)
+		      (booleanp e)
+		      (booleanp f)
+		      (booleanp g)
+		      (booleanp h)
+		      (booleanp i)
+		      (booleanp j)
+		      (booleanp k)
+		      (booleanp l)
+ 		(equal 2 (count_element_mismatch_tlist (hamming7-4-encode a b c d)
+		       	 	   	       		(list e f g h i j k l))))
+	    (equal (len (hamming7-4-decode e f g h i j k l)) 1)));error only detectable
+
+
+
+
+
+;THEOREMS (implementing hamming on memory)
+;=========================================
+
+;Theorem: Code remains unchanged in memory
+(defthm load-store-hamm
+	(implies (and (< n (len mem))
+		      (byte-alistp mem)
+		      (equal (len (hamming7-4-encode x3 x5 x6 x7)) 8)
+		      (equal (hamming7-4-encode x3 x5 x6 x7)
+		       	     (list x1 x2 x3 x4 x5 x6 x7 x8)))
+		 (equal (load_byte n (store_byte n mem (hamming7-4-encode x3 x5 x6 x7)))
+		 	(list x1 x2 x3 x4 x5 x6 x7 x8)))
+	:hints (("Goal" :in-theory (disable hamming7-4-encode)
+	       		:use ((:instance load-store
+			     		 (byte (hamming7-4-encode x3 x5 x6 x7)))))))
+
+;Theorem: Code retrieved from memory is correctly decoded
+(defthm mem-noerror-hamm
+ (IMPLIES
+  (AND (< N (LEN MEM))
+       (BYTE-ALISTP MEM)
+       (EQUAL (LEN (LIST E F G H I J K L)) 8)
+       (BOOLEANP A)
+       (BOOLEANP B)
+       (BOOLEANP C)
+       (BOOLEANP D)
+       (EQUAL (HAMMING7-4-ENCODE A B C D)
+              (LIST E F G H I J K L)))
+  (EQUAL
+         (HAMMING7-4-DECODE
+              (FIRST (LOAD_BYTE N
+                                (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (SECOND (LOAD_BYTE N
+                                 (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (THIRD (LOAD_BYTE N
+                                (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (FOURTH (LOAD_BYTE N
+                                 (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (FIFTH (LOAD_BYTE N
+                                (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (SIXTH (LOAD_BYTE N
+                                (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (SEVENTH (LOAD_BYTE N
+                                  (STORE_BYTE N MEM (LIST E F G H I J K L))))
+              (EIGHTH (LOAD_BYTE N
+                                 (STORE_BYTE N MEM (LIST E F G H I J K L)))))
+         (LIST A B C D)))
+ :INSTRUCTIONS (:PROMOTE (:DV 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP :PROVE))
+
+;Theorem: Code retrieved from memory is correctly decoded in presence of single error
+(DEFTHM mem-single-error-hamm
+ (IMPLIES
+  (AND (< N (LEN MEM))
+       (BYTE-ALISTP MEM)
+       (BOOLEANP A)
+       (BOOLEANP B)
+       (BOOLEANP C)
+       (BOOLEANP D)
+       (EQUAL (HAMMING7-4-ENCODE A B C D)
+              (LIST E F G H I J K L)))
+  (AND
+   (IMPLIES
+    (EQUAL (LEN (LIST (NOT E) F G H I J K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST (NOT E) F G H I J K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E (NOT F) G H I J K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E (NOT F) G H I J K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F (NOT G) H I J K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F (NOT G) H I J K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F G (NOT H) I J K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G (NOT H) I J K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F G H (NOT I) J K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H (NOT I) J K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F G H I (NOT J) K L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I (NOT J) K L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F G H I J (NOT K) L))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J (NOT K) L)))))
+     (LIST A B C D)))
+   (IMPLIES
+    (EQUAL (LEN (LIST E F G H I J K (NOT L)))
+           8)
+    (EQUAL
+     (HAMMING7-4-DECODE
+        (FIRST (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (SECOND (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (THIRD (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (FOURTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (FIFTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (SIXTH (LOAD_BYTE N
+                          (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (SEVENTH (LOAD_BYTE N
+                            (STORE_BYTE N MEM (LIST E F G H I J K (NOT L)))))
+        (EIGHTH (LOAD_BYTE N
+                           (STORE_BYTE N MEM (LIST E F G H I J K (NOT L))))))
+     (LIST A B C D)))))
+ :INSTRUCTIONS (:PROMOTE (:DV 1 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 1 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 2 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 3 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 4 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 5 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 6 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 7 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 2 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 3 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 4 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 5 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 6 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 7 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP (:DV 8 2 1 8 1 1)
+                         (:REWRITE LOAD-STORE)
+                         :TOP :PROVE))

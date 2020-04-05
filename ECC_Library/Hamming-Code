@@ -1,0 +1,169 @@
+;Hamming SEC-DED (7,4)
+;=====================
+
+;HAMMING (7,4) ENCODER
+(defun hamming7-4-encode (x3 x5 x6 x7)
+       (append (list (xor (xor x3 x5) x7))
+       	       (list (xor (xor x3 x6) x7))
+	       (list x3)
+	       (list (xor (xor x5 x6) x7))
+	       (list x5)
+	       (list x6)
+	       (list x7)
+	       (list (xor
+			(xor
+			   (xor
+			      (xor
+				 (xor
+				    (xor
+				       (xor (xor x3 x5) x7)  ;=x1
+				       (xor (xor x3 x6) x7)) ;=x2
+				  x3)
+			      (xor (xor x5 x6) x7))	     ;=x4
+			   x5)
+			x6)
+		     x7))))
+
+;Parity bits for single-error correction: x1, x2, x4
+;Parity bit for double-error detection: x8
+
+;HAMMING (7,4) DECODER
+(defun hamming7-4-decode (x1 x2 x3 x4 x5 x6 x7 x8)
+
+       ;SINGLE ERROR CONDITION
+       (cond ((and (xor x8
+       	   	     	(xor (xor (xor (xor (xor (xor x1 x2) x3) x4) x5) x6) x7)) ;x8 flipped
+	   	   (not (equal 0 (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7))
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))))))
+					    ;error location not zero
+				       
+	      (if (or (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7))
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 1)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 2)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 4)
+		      (equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))) 8)) 
+		  (list x3 x5 x6 x7) ;error was in parity bit
+	       	  (cond ((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				3)
+			 (list (not x3) x5 x6 x7))	
+			((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				5)
+			 (list x3 (not x5) x6 x7))
+			((equal (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7)))
+				6)
+			 (list x3 x5 (not x6) x7))
+			(t
+			 (list x3 x5 x6 (not x7))))))
+
+
+       ;DOUBLE ERROR CONDITION
+             ((and (not (xor x8
+       	   	     	(xor (xor (xor (xor (xor (xor x1 x2) x3) x4) x5) x6) x7))) ;x8 not flipped
+	   	   (not (equal 0 (bin_to_dec nil
+     	    		      	      	    (xor x4 (xor (xor x5 x6) x7))
+					    (xor x2 (xor (xor x3 x6) x7)) 
+		       	   	  	    (xor x1 (xor (xor x3 x5) x7))))))
+					    ;error location not zero
+	      (msg "Double-Bit Error Detected"))
+
+
+       ;NO ERROR CONDITION
+             (t (list x3 x5 x6 x7))))
+
+;-------------------------------------------------------------------------------------
+;THEOREMS
+
+;Theorem: Hamming Distance=4
+(defthm hamm_distance4
+	(implies (not (equal
+		      (bin_to_dec a b c d)
+      		      (bin_to_dec e f g h)))
+		 (>= (count_element_mismatch_tlist
+				(hamming7-4-encode a b c d)
+		     		(hamming7-4-encode e f g h))
+		     4)))
+
+;Theorems: Encoder and Decoder give same output in no error condition
+(defthm hamm-NO-ERROR1
+	(implies
+		(equal (count_element_mismatch_tlist (hamming7-4-encode x3 x5 x6 x7)
+		       		 	       	     (list x1 x2 x3 x4 x5 x6 x7 x8))
+			0)
+		(equal (hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8)
+		       (list x3 x5 x6 x7))
+		))
+
+(defthm hamm-NO-ERROR2
+	(implies
+		(equal (hamming7-4-encode x3 x5 x6 x7)
+		       (list x1 x2 x3 x4 x5 x6 x7 x8))
+		(equal (hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8)
+		       (list x3 x5 x6 x7))))
+
+;Theorems: Single Errors are Corrected
+(defthm hamm-SEC1
+	(implies (equal 1
+		 	(count_element_mismatch_tlist
+					(hamming7-4-encode x3 x5 x6 x7)
+		       	 	   	(list x1 x2 x3 x4 x5 x6 x7 x8)));single bit flip
+	    	 (equal (list x3 x5 x6 x7)
+			(hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8))))
+			;output will be corrected code
+;(Weak theorem: only checks for error in parity bit)
+
+(defthm hamm-SEC2     
+	(implies (and (booleanp a)
+		      (booleanp b)
+		      (booleanp c)
+		      (booleanp d)
+ 		 (equal (hamming7-4-encode a b c d)
+		        (list e f g h i j k l)))
+	(and (equal (hamming7-4-decode e f (not g) h i j k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h (not i) j k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h i (not j) k l)
+	       	    (list a b c d))
+	     (equal (hamming7-4-decode e f g h i j (not k) l)
+	       	    (list a b c d)))))
+
+
+;Theorem: Double Errors are Detected
+(defthm hamm-DED     
+	(implies (and (booleanp a)
+		      (booleanp b)
+		      (booleanp c)
+		      (booleanp d)
+		      (booleanp e)
+		      (booleanp f)
+		      (booleanp g)
+		      (booleanp h)
+		      (booleanp i)
+		      (booleanp j)
+		      (booleanp k)
+		      (booleanp l)
+ 		(equal 2 (count_element_mismatch_tlist (hamming7-4-encode a b c d)
+		       	 	   	       		(list e f g h i j k l))))
+	    (equal (len (hamming7-4-decode e f g h i j k l)) 1)));error only detectable

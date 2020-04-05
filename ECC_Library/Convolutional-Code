@@ -1,0 +1,980 @@
+;Convolutional Encoder (1/2 rate)
+;================================
+
+;XOR BASED ENCODER Definition
+(defun encode_xor (old data)
+       (declare (xargs :guard (and (true-listp old)
+       		       	      	   (true-listp data))
+		       :verify-guards nil))
+
+  (if (endp old)
+      nil
+    (let* ((xn (xor (xor (first old)
+    	       	    	 (second old))
+               	    (first data)))
+       	   (yn (xor (first old)
+               	    (first data))))   
+      	  (cons (cons xn yn)
+          	(encode_xor (cdr old) (cdr data))))))
+
+(defun encoder_conv_xor (lst)
+       (encode_xor (append '(nil nil) lst) lst))
+
+;-------------------------------------------------------------------------------------------
+;THEOREMS
+
+;Theorem: Appending before or after encoding has same results
+(defthm encode-append-xor
+	(implies (and (true-listp A)
+		      (true-listp B))
+		 (equal (append (encoder_conv_xor A) (encoder_conv_xor B))
+			(encoder_conv_xor (append A '(nil nil) B)))))
+
+;Theorem: Lengths increase after encoding
+(defthm len-encoder-xor
+	(implies (true-listp lst)
+		 (equal (len (encoder_conv_xor lst))
+		 	(+ 2 (len lst)))))
+
+(defthm alistp_encode
+	(implies (true-listp data)
+		 (alistp (encode_xor data (cddr data)))))
+
+(defthm boolean_encode
+	(implies (boolean-listp data)
+		 (and (boolean-listp (strip-cars (encode_xor data (cddr data))))
+		      (boolean-listp (strip-cdrs (encode_xor data (cddr data)))))))
+
+(defthmd truelistp_encode
+	(implies (true-listp data)
+		 (true-listp (encode_xor data (cddr data)))))
+
+(defthm encode-cdr
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		 (equal (encode_xor (cdr data) (cdddr data))
+		 	(cdr (encode_xor data (cddr data))))))
+
+(defthmd cdr-encode
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		 (equal (cdr (encode_xor data (cddr data)))
+		 	(encode_xor (cdr data) (cdddr data)))))
+
+
+;-------------------------------------------------------------------------------------------
+
+
+;STATE_DIAGRAM BASED ENCODER Definition
+(defun encode_FSM (st0 st1 data)
+        (declare (xargs :guard 	(and (true-listp data)
+				(booleanp st0)
+				(booleanp st1))
+		       	:verify-guards nil))
+
+	(if (endp data)
+	    nil
+	    (cond ((and (equal st0 nil)
+	    	  	(equal st1 nil))
+		   (if (equal (car data) nil)
+		       (cons (cons nil nil) (encode_FSM nil st0 (cdr data)))
+		       (cons (cons t t) (encode_FSM t st0 (cdr data)))))
+
+		  ((and (equal st0 nil)
+	    	  	(equal st1 t))
+		   (if (equal (car data) nil)
+		       (cons (cons t t) (encode_FSM nil st0 (cdr data)))
+		       (cons (cons nil nil) (encode_FSM t st0 (cdr data)))))
+
+		  ((and (equal st0 t)
+	    	  	(equal st1 nil))
+		   (if (equal (car data) nil)
+		       (cons (cons t nil) (encode_FSM nil st0 (cdr data)))
+		       (cons (cons nil t) (encode_FSM t st0 (cdr data)))))
+
+		  (t
+		   (if (equal (car data) nil)
+		       (cons (cons nil t) (encode_FSM nil st0 (cdr data)))
+		       (cons (cons t nil) (encode_FSM t st0 (cdr data))))))))
+		       
+
+(defun encoder_conv_FSM (lst)
+       (encode_FSM nil nil (append lst '(nil nil))))
+       
+;-------------------------------------------------------------------------------------------
+
+;Theorem: encoding using both XOR and FSM approaches give same codeword
+(defthm equality-xor-FSM
+	(implies (true-listp lst)
+		 (equal (encoder_conv_FSM lst)
+		 	(encoder_conv_xor lst))))
+;Proved in 14796 steps
+
+;-------------------------------------------------------------------------------------------
+;THEOREMS
+
+(in-theory (disable encoder_conv_FSM))
+(in-theory (disable encoder_conv_xor))
+
+;Theorem: Appending before or after encoding has same results
+(defthm encode-append-FSM
+	(implies (and (alistp A)
+		      (alistp B))
+		 (equal (encoder_conv_FSM (append A '(nil nil) B))
+		 	(append (encoder_conv_FSM A) (encoder_conv_FSM B))))
+	:hints (("Goal" :use encode-append-xor)))	
+
+;Theorem: Lengths increase after encoding
+(defthm len-encoder-FSM
+	(implies (alistp lst)
+		 (equal (len (encoder_conv_FSM lst))
+		 	(+ 2 (len lst))))
+	:hints (("Goal" :use len-encoder-xor)))
+
+(in-theory (enable encoder_conv_FSM))
+(in-theory (enable encoder_conv_xor))
+
+(defthm min-hamm-dist-conv1
+	(implies (true-listp lst)
+		 (= (count_element_mismatch
+			(encoder_conv_FSM (cons t lst))
+			(encoder_conv_FSM (cons nil lst))) 5))
+	:hints (("Goal" :use equality-xor-fsm)))
+
+(in-theory (disable encoder_conv_xor))
+(in-theory (disable encoder_conv_FSM))
+(in-theory (disable equality-xor-FSM))
+
+;Theorem: Hamming Distance = 5 (for given convolutional codes)
+(defthm min-hamm-dist-conv
+	(implies (and (true-listp A)
+		      (true-listp B)
+		      (alistp (encoder_conv_FSM A))
+		      (alistp (encoder_conv_FSM (cons t B)))
+		      (alistp (encoder_conv_FSM (cons nil B))))
+		 (equal (count_element_mismatch
+				(append (encoder_conv_FSM A)
+					(encoder_conv_FSM (cons t B)))
+				(append (encoder_conv_FSM A)
+					(encoder_conv_FSM (cons nil B)))) 5))
+	:hints (("Goal" :do-not-induct t
+	       		:use ((:instance count-mismatch-append
+			      		 (A (encoder_conv_FSM A)))
+			      (:instance min-hamm-dist-conv1
+					 (LST B))))))
+
+(in-theory (enable encoder_conv_xor))
+(in-theory (enable encoder_conv_FSM))
+(in-theory (enable equality-xor-FSM))
+
+;Convolutional Decoder (1/2 rate)
+;================================
+
+(defun decode_xor (code)
+       (if (endp (cdddr code))
+	    nil
+;stop when 6 (3 pair) are left (discard appended NILs at end and the impact of xn-1 yn-1)
+
+      	   (cons
+		(or (and (xor (xor (cdr (first code)) (cdr (second code)))
+		 	      (car (first code))) ;dna
+			     	   
+	   	      	 (xor (xor (xor (cdr (third code)) (cdr (fourth code)))
+			      	   (car (third code))) ;dn+2a
+
+			      (xor (car (fifth code)) (cdr (fifth code))) ;dn+2b
+			 ))
+			 
+     	   	    (and (xor (car (third code)) (cdr (third code))) ;dnb
+			      
+	   	      	 (xor (xor (xor (cdr (third code)) (cdr (fourth code)))
+			      	   (car (third code))) ;dn+2a
+				   
+	  	      	      (not (xor (car (fifth code)) (cdr (fifth code)))) ;not(dn+2b)
+			      )))
+
+		(decode_xor (cdr code)))))
+
+(defun decoder_conv_xor (code)
+       	(decode_xor (append '((nil nil)) code)))
+
+;-------------------------------------------------------------------------------------------
+;THEOREMS
+
+;Relation between decoder_conv_xor and decode_xor
+(defthmd decode-decoder
+	(implies (alistp code)
+		 (equal (decode_xor code)
+		 	(cdr (decoder_conv_xor code)))))
+
+(defthm decode-cons
+	(implies (and (alistp code)
+		      (booleanp a)
+		      (booleanp b))
+		 (equal (cdr (decode_xor (cons (cons a b) code)))
+		 	(decode_xor code))))
+
+(defthmd decode-cdr
+    (implies (alistp X)
+	     (equal (cdr (decode_xor X))
+	     	    (decode_xor (cdr X)))))
+
+(defthmd decode-cdr2
+    (implies (alistp X)
+	     (equal (decode_xor (cdr X))
+	     	    (cdr (decode_xor X))))
+    :hints (("Goal" :instructions
+    	   	    (:promote
+		    (:dv 2)
+		    (r decode-cdr)
+		    :up
+		    :demote))))
+
+(defthm cons-decode-cdr
+    (implies (and (booleanp D)
+    	     	  (booleanp A)
+		  (booleanp B)
+    	     	  (alistp Y))
+	     (equal (cons D (cdr (decode_xor (cons (cons A B) Y))))
+	     	    (cons D (decode_xor Y))))
+    :hints (("Goal" :in-theory (disable decode_xor))))
+
+(defthm equal-cons-car-cdr
+	(implies (and (true-listp X)
+		      (not (endp X)))
+		 (equal (equal (cons (car X) (cdr X)) Y)
+		 	(equal X Y))))
+
+(defthmd len-decode
+        (implies (and (>= (len code) 3) (alistp code))
+                 (equal (- (len code) 3)
+                        (len (decode_xor code))))
+        :instructions ((:induct (len code))
+                       :prove (:dv 2 2 1)
+                       (:rewrite decode_xor)
+                       :up :s
+                       :top (:in-theory (disable decode_xor))
+                       :prove))
+
+;Theorem: Decoding codeword without error - trivial case (length of data = 0)
+(defthm no-error-conv-base-case
+	(implies (equal data nil)
+		 (equal (decoder_conv_xor (encoder_conv_xor data))
+			data)))
+	   
+;Theorem: Decoding codeword without error - trivial case (length of data <= 3)
+(defthm no-error-conv2
+	(or (equal (decode_xor (encode_xor '(nil nil nil) '(nil))) nil)
+	    (equal (decode_xor (encode_xor '(nil nil t) '(t))) nil)
+	    (equal (decode_xor (encode_xor '(nil t nil) '(nil))) nil)
+	    (equal (decode_xor (encode_xor '(nil t t) '(t))) nil)
+	    (equal (decode_xor (encode_xor '(t nil nil) '(nil))) nil)
+	    (equal (decode_xor (encode_xor '(t nil t) '(t))) nil)
+	    (equal (decode_xor (encode_xor '(t t nil) '(nil))) nil)
+	    (equal (decode_xor (encode_xor '(t t t) '(t))) nil)
+	    
+	    (equal (decode_xor (encode_xor '(nil nil) nil)) nil)
+	    (equal (decode_xor (encode_xor '(nil t) nil)) nil)
+	    (equal (decode_xor (encode_xor '(t nil) nil)) nil)
+	    (equal (decode_xor (encode_xor '(t t) nil)) nil)
+	    
+	    (equal (decode_xor (encode_xor '(nil) nil)) nil)
+	    (equal (decode_xor (encode_xor '(t) nil)) nil)))
+
+(defthmd lemma-decode-encode-once
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		 (equal (or (and (xor (xor (xor (first data) (third data))
+		 	    	      	   (xor (second data) (fourth data)))
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+(defthmd car-decode
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+	(equal (car (decode_xor (encode_xor data (cddr data))))
+	       (or (and (xor (xor (xor (first data) (third data))
+		 	    	  (xor (second data) (fourth data)))
+			     (xor (first data)
+		      	       	  (xor (second data) (third data))))
+	   	      	(xor (xor (xor (xor (third data) (fifth data))
+				       (xor (fourth data) (sixth data)))
+			          (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	     (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				  (xor (fifth data) (seventh data)))))
+					   
+     	   	   (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			     (xor (third data) (fifth data)))
+	   	      	(xor (xor (xor (xor (third data) (fifth data))
+				       (xor (fourth data) (sixth data)))
+			          (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	     (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				       (xor (fifth data) (seventh data))))))))))
+
+(DEFTHMD
+ LEMMA-DECODE-FIRST-ELEMENT-CODE
+ (IMPLIES
+   (AND (TRUE-LISTP DATA)
+        (BOOLEAN-LISTP DATA))
+   (EQUAL
+        (CONS (CAR (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA))))
+              (CDR (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA)))))
+        (CONS (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
+                                 (XOR (SECOND DATA) (FOURTH DATA)))
+                            (XOR (FIRST DATA)
+                                 (XOR (SECOND DATA) (THIRD DATA))))
+                       (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                                      (XOR (FOURTH DATA) (SIXTH DATA)))
+                                 (XOR (THIRD DATA)
+                                      (XOR (FOURTH DATA) (FIFTH DATA))))
+                            (XOR (XOR (FIFTH DATA)
+                                      (XOR (SIXTH DATA) (SEVENTH DATA)))
+                                 (XOR (FIFTH DATA) (SEVENTH DATA)))))
+                  (AND (XOR (XOR (THIRD DATA)
+                                 (XOR (FOURTH DATA) (FIFTH DATA)))
+                            (XOR (THIRD DATA) (FIFTH DATA)))
+                       (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                                      (XOR (FOURTH DATA) (SIXTH DATA)))
+                                 (XOR (THIRD DATA)
+                                      (XOR (FOURTH DATA) (FIFTH DATA))))
+                            (NOT (XOR (XOR (FIFTH DATA)
+                                           (XOR (SIXTH DATA) (SEVENTH DATA)))
+                                      (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+              (CDR (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA)))))))
+ :INSTRUCTIONS (:PROMOTE (:REWRITE CONS-EQUAL)
+                         (:DV 2)
+                         :S :TOP
+                         :DEMOTE (:USE CAR-DECODE)))
+
+(DEFTHMD
+ DECODE-FIRST-ELEMENT-CODE2
+ (IMPLIES
+   (AND (TRUE-LISTP DATA)
+        (BOOLEAN-LISTP DATA)
+	(> (len data) 3))
+   (EQUAL
+        (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA)))
+        (CONS (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
+                                 (XOR (SECOND DATA) (FOURTH DATA)))
+                            (XOR (FIRST DATA)
+                                 (XOR (SECOND DATA) (THIRD DATA))))
+                       (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                                      (XOR (FOURTH DATA) (SIXTH DATA)))
+                                 (XOR (THIRD DATA)
+                                      (XOR (FOURTH DATA) (FIFTH DATA))))
+                            (XOR (XOR (FIFTH DATA)
+                                      (XOR (SIXTH DATA) (SEVENTH DATA)))
+                                 (XOR (FIFTH DATA) (SEVENTH DATA)))))
+                  (AND (XOR (XOR (THIRD DATA)
+                                 (XOR (FOURTH DATA) (FIFTH DATA)))
+                            (XOR (THIRD DATA) (FIFTH DATA)))
+                       (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                                      (XOR (FOURTH DATA) (SIXTH DATA)))
+                                 (XOR (THIRD DATA)
+                                      (XOR (FOURTH DATA) (FIFTH DATA))))
+                            (NOT (XOR (XOR (FIFTH DATA)
+                                           (XOR (SIXTH DATA) (SEVENTH DATA)))
+                                      (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+              (CDR (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA)))))))
+ :INSTRUCTIONS ((:USE LEMMA-DECODE-FIRST-ELEMENT-CODE)
+                :DEMOTE (:DV 1 2)
+                (:REWRITE EQUAL-CONS-CAR-CDR)
+                :TOP
+                :PROVE :PROVE))
+
+(in-theory (disable decode_xor))
+
+;Theorem: Decoding codeword without error - non-trivial case (length of data > 3)
+(DEFTHM no-error-conv1
+        (IMPLIES (AND (TRUE-LISTP DATA)
+                      (BOOLEAN-LISTP DATA)
+                      (> (LEN DATA) 3))
+                 (EQUAL (DECODE_XOR (ENCODE_XOR DATA (CDDR DATA)))
+                        (CDDDR DATA)))
+        :INSTRUCTIONS (:INDUCT (:CHANGE-GOAL NIL T)
+                               :PROVE :DEMOTE (:DV 1 2 2 1 1)
+                               (:REWRITE ENCODE-CDR)
+                               :UP (:REWRITE DECODE-CDR2)
+                               :TOP (:DV 2 2 1)
+                               (:REWRITE DECODE-FIRST-ELEMENT-CODE2)
+                               (:DV 1)
+                               (:REWRITE LEMMA-DECODE-ENCODE-ONCE)
+                               :TOP
+                               :PROVE :PROVE))
+
+(in-theory (enable decode_xor))
+
+;Theorem: Decoding codeword with error - trivial case (length of data = 0)
+(defthm SEC-conv-base-case
+	(implies (and (booleanp flg)
+		      (equal data nil)
+		      (>= n 0)
+		      (< n (len data)))
+		 (equal (decoder_conv_xor (bit_flip_pair n flg (encoder_conv_xor data)))
+			data)))
+			
+(DEFTHMD ENCODE-1ITERATION
+        (IMPLIES (AND (TRUE-LISTP DATA)
+                      (BOOLEAN-LISTP DATA)
+                      (> (LEN DATA) 3))
+                 (EQUAL (ENCODE_XOR DATA (CDDR DATA))
+                        (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
+                                         (THIRD DATA))
+                                    (XOR (FIRST DATA) (THIRD DATA)))
+                              (ENCODE_XOR (CDR DATA) (CDDDR DATA)))))
+        :INSTRUCTIONS (:PROMOTE (:DV 1)
+                                (:REWRITE ENCODE_XOR)
+                                :TOP :PROVE))
+	
+(defthmd bitflip-cons-encode
+	 (implies (and (true-listp data)
+	 	       (boolean-listp data)
+		       (not (zp n))
+		       (booleanp flg))
+	 	  (equal (bit_flip_pair n flg (encode_xor data (cddr data)))
+		  	 (cons (car (encode_xor data (cddr data)))
+			       (bit_flip_pair (- n 1) flg (cdr (encode_xor data (cddr data)))))))
+	:hints (("Goal" :use ((:instance bitflip-cons
+	       		     		 (lst (encode_xor data (cddr data))))))))
+
+(DEFTHMD BITFLIP-ENCODE-FLG
+     (IMPLIES (AND (TRUE-LISTP DATA)
+                   (BOOLEAN-LISTP DATA)
+                   (> (LEN DATA) 3)
+                   (ZP N)
+                   (BOOLEANP FLG)
+                   FLG)
+              (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
+                     (CONS (CONS (NOT (XOR (XOR (FIRST DATA) (SECOND DATA))
+                                           (THIRD DATA)))
+                                 (XOR (FIRST DATA) (THIRD DATA)))
+                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))))
+     :INSTRUCTIONS (:PROMOTE (:DV 1 3)
+                             (:REWRITE ENCODE-1ITERATION)
+                             :UP (:REWRITE BIT_FLIP_PAIR)
+                             :TOP :PROVE))
+
+(DEFTHMD BITFLIP-ENCODE-NOT-FLG
+     (IMPLIES (AND (TRUE-LISTP DATA)
+                   (BOOLEAN-LISTP DATA)
+                   (> (LEN DATA) 3)
+                   (ZP N)
+                   (BOOLEANP FLG)
+                   (NOT FLG))
+              (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
+                     (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
+                                           (THIRD DATA))
+                                 (NOT (XOR (FIRST DATA) (THIRD DATA))))
+                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))))
+     :INSTRUCTIONS (:PROMOTE (:DV 1 3)
+                             (:REWRITE ENCODE-1ITERATION)
+                             :UP (:REWRITE BIT_FLIP_PAIR)
+                             :TOP :PROVE))
+
+(defthmd bitflip-encode-not-zpn
+	 (IMPLIES (AND (TRUE-LISTP DATA)
+                       (BOOLEAN-LISTP DATA)
+                       (> (LEN DATA) 3)
+                       (not (zp n))
+                       (BOOLEANP FLG))
+              	  (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
+                     	 (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
+                                               (THIRD DATA))
+                                     (XOR (FIRST DATA) (THIRD DATA)))
+                               (BIT_FLIP_PAIR (- N 1) FLG (cdr (ENCODE_XOR DATA (CDDR DATA)))))))
+	:hints (("Goal" :use bitflip-cons-encode)))
+
+
+(defthmd SEC-flg
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		 (equal (or (and (xor (xor (xor (first data) (third data))
+		 	    	      	   (xor (second data) (fourth data)))
+			         (not (xor (first data)
+		      	       	      	   (xor (second data) (third data))))) ;error-in-x0
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+(defthmd SEC-not-flg
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		 (equal (or (and (xor (xor (not (xor (first data) (third data))) ;error-in-y0
+		 	    	      	   (xor (second data) (fourth data)))
+			         (xor (first data)
+		      	       	      	   (xor (second data) (third data))))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+(in-theory (disable bit_flip_pair))
+
+(defthmd car-decode-bitflip-encode-flg
+	 (implies (and (true-listp data)
+		       (boolean-listp data)
+		       (> (len data) 3)
+		       (zp n)
+		       (booleanp flg)
+		       flg)
+	 	  (equal (car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))
+		  	 (or (and (xor (xor (xor (first data) (third data))
+		 	    	      	    (xor (second data) (fourth data)))
+			         	    (not (xor (first data)
+		      	       	      	     	      (xor (second data) (third data)))))
+	   	      	       	        (xor (xor (xor (xor (third data) (fifth data))
+				      	   	       (xor (fourth data) (sixth data)))
+					   	  (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	             (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	     	  (xor (fifth data) (seventh data)))))
+					   
+     	   	      	           (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      	     (xor (third data) (fifth data)))
+	   	      	       	 	(xor (xor (xor (xor (third data) (fifth data))
+				      	   	       (xor (fourth data) (sixth data)))
+					   	  (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	             (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	       (xor (fifth data) (seventh data)))))))))
+	:hints (("Goal" :use bitflip-encode-flg)))
+
+(defthmd car-decode-bitflip-encode-not-flg
+	 (implies (and (true-listp data)
+		       (boolean-listp data)
+		       (> (len data) 3)
+		       (zp n)
+		       (booleanp flg)
+		       (not flg))
+	 	  (equal (car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))
+		  	 (or (and (xor (xor (not (xor (first data) (third data)))
+		 	    	      	     	 (xor (second data) (fourth data)))
+			         	    (xor (first data)
+		      	       	      	     	  (xor (second data) (third data))))
+	   	      	       	        (xor (xor (xor (xor (third data) (fifth data))
+				      	   	       (xor (fourth data) (sixth data)))
+					   	  (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	             (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	     	  (xor (fifth data) (seventh data)))))
+					   
+     	   	      	           (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      	     (xor (third data) (fifth data)))
+	   	      	       	 	(xor (xor (xor (xor (third data) (fifth data))
+				      	   	       (xor (fourth data) (sixth data)))
+					   	  (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	             (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	       (xor (fifth data) (seventh data)))))))))
+	:hints (("Goal" :use bitflip-encode-not-flg)))
+
+(DEFTHMD
+ lemma-decode-bitflip-encode-flg
+ (IMPLIES
+  (AND (TRUE-LISTP DATA)
+       (BOOLEAN-LISTP DATA)
+       (BOOLEANP FLG)
+       (> (LEN DATA) 3)
+       (ZP N)
+       FLG)
+  (EQUAL
+   (CONS
+      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
+   (CONS
+      (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
+                         (XOR (SECOND DATA) (FOURTH DATA)))
+                    (NOT (XOR (FIRST DATA)
+                              (XOR (SECOND DATA) (THIRD DATA)))))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (XOR (XOR (FIFTH DATA)
+                              (XOR (SIXTH DATA) (SEVENTH DATA)))
+                         (XOR (FIFTH DATA) (SEVENTH DATA)))))
+          (AND (XOR (XOR (THIRD DATA)
+                         (XOR (FOURTH DATA) (FIFTH DATA)))
+                    (XOR (THIRD DATA) (FIFTH DATA)))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (NOT (XOR (XOR (FIFTH DATA)
+                                   (XOR (SIXTH DATA) (SEVENTH DATA)))
+                              (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+ :INSTRUCTIONS (:PROMOTE (:REWRITE CONS-EQUAL)
+                         (:DV 2)
+                         :S :TOP
+                         :DEMOTE (:USE CAR-DECODE-BITFLIP-ENCODE-FLG)))
+
+(DEFTHMD
+  lemma-decode-bitflip-encode-not-flg
+(IMPLIES
+  (AND (TRUE-LISTP DATA)
+       (BOOLEAN-LISTP DATA)
+       (BOOLEANP FLG)
+       (> (LEN DATA) 3)
+       (ZP N)
+       (NOT FLG))
+  (EQUAL
+   (CONS
+      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
+   (CONS
+      (OR (AND (XOR (XOR (NOT (XOR (FIRST DATA) (THIRD DATA)))
+                         (XOR (SECOND DATA) (FOURTH DATA)))
+                    (XOR (FIRST DATA)
+                         (XOR (SECOND DATA) (THIRD DATA))))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (XOR (XOR (FIFTH DATA)
+                              (XOR (SIXTH DATA) (SEVENTH DATA)))
+                         (XOR (FIFTH DATA) (SEVENTH DATA)))))
+          (AND (XOR (XOR (THIRD DATA)
+                         (XOR (FOURTH DATA) (FIFTH DATA)))
+                    (XOR (THIRD DATA) (FIFTH DATA)))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (NOT (XOR (XOR (FIFTH DATA)
+                                   (XOR (SIXTH DATA) (SEVENTH DATA)))
+                              (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+ :INSTRUCTIONS (:PROMOTE (:REWRITE CONS-EQUAL)
+                         (:DV 2)
+                         :S :TOP
+                         :DEMOTE (:USE CAR-DECODE-BITFLIP-ENCODE-NOT-FLG)))
+
+(in-theory (enable cdr-bitflip))
+
+;Theorem: Decoding codeword with error - trivial case (n = 0)
+(DEFTHMD DECODE-BITFLIP-ENCODE-FLG
+ (IMPLIES
+  (AND (TRUE-LISTP DATA)
+       (BOOLEAN-LISTP DATA)
+       (BOOLEANP FLG)
+       (> (LEN DATA) 3)
+       (ZP N)
+       FLG)
+  (EQUAL
+   (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))
+   (CONS
+      (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
+                         (XOR (SECOND DATA) (FOURTH DATA)))
+                    (NOT (XOR (FIRST DATA)
+                              (XOR (SECOND DATA) (THIRD DATA)))))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (XOR (XOR (FIFTH DATA)
+                              (XOR (SIXTH DATA) (SEVENTH DATA)))
+                         (XOR (FIFTH DATA) (SEVENTH DATA)))))
+          (AND (XOR (XOR (THIRD DATA)
+                         (XOR (FOURTH DATA) (FIFTH DATA)))
+                    (XOR (THIRD DATA) (FIFTH DATA)))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (NOT (XOR (XOR (FIFTH DATA)
+                                   (XOR (SIXTH DATA) (SEVENTH DATA)))
+                              (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+ :INSTRUCTIONS ((:USE LEMMA-DECODE-BITFLIP-ENCODE-FLG)
+                :DEMOTE (:DV 1 2)
+                (:REWRITE EQUAL-CONS-CAR-CDR)
+                :TOP
+                :PROVE :PROVE))
+
+;Theorem: Decoding codeword with error - trivial case (n = 0)
+(DEFTHMD
+ DECODE-BITFLIP-ENCODE-NOT-FLG
+ (IMPLIES
+  (AND (TRUE-LISTP DATA)
+       (BOOLEAN-LISTP DATA)
+       (BOOLEANP FLG)
+       (> (LEN DATA) 3)
+       (ZP N)
+       (NOT FLG))
+  (EQUAL
+   (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))
+   (CONS
+      (OR (AND (XOR (XOR (NOT (XOR (FIRST DATA) (THIRD DATA)))
+                         (XOR (SECOND DATA) (FOURTH DATA)))
+                    (XOR (FIRST DATA)
+                         (XOR (SECOND DATA) (THIRD DATA))))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (XOR (XOR (FIFTH DATA)
+                              (XOR (SIXTH DATA) (SEVENTH DATA)))
+                         (XOR (FIFTH DATA) (SEVENTH DATA)))))
+          (AND (XOR (XOR (THIRD DATA)
+                         (XOR (FOURTH DATA) (FIFTH DATA)))
+                    (XOR (THIRD DATA) (FIFTH DATA)))
+               (XOR (XOR (XOR (XOR (THIRD DATA) (FIFTH DATA))
+                              (XOR (FOURTH DATA) (SIXTH DATA)))
+                         (XOR (THIRD DATA)
+                              (XOR (FOURTH DATA) (FIFTH DATA))))
+                    (NOT (XOR (XOR (FIFTH DATA)
+                                   (XOR (SIXTH DATA) (SEVENTH DATA)))
+                              (XOR (FIFTH DATA) (SEVENTH DATA)))))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+ :INSTRUCTIONS ((:USE LEMMA-DECODE-BITFLIP-ENCODE-NOT-FLG)
+                :DEMOTE (:DV 1 2)
+                (:REWRITE EQUAL-CONS-CAR-CDR)
+                :TOP
+                :PROVE :PROVE))
+
+(in-theory (disable cdr-bitflip))
+
+;Decoding single data bit involves the use of: (x0 y0),(y1),(x2 y2),(y3),(x4 y4)
+;Theorem: Error in x0 can be corrected
+(defthm error-in-x0
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		 (equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	   (xor (second data) (fourth data)))
+			         (not (xor (first data)
+		      	       	      	   (xor (second data) (third data))))) ;error-in-x0
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+		
+;Theorem: Error in y0 can be corrected			
+(defthm error-in-y0
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		 (equal (or (and (xor (xor (not (xor (first data) (third data))) ;error-in-y0 
+		 	    	      	   (xor (second data) (fourth data)))
+			         (xor (first data)
+		      	       	      	   (xor (second data) (third data))))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+;Theorem: Error in y1 can be corrected
+(defthm error-in-y1			
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (not (xor (second data) (fourth data)))) ;error-in-y1
+			         (xor (first data)
+		      	       	      	   (xor (second data) (third data))))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+				
+;Theorem: Error in x2 can be corrected
+(defthm error-in-x2
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (xor (second data) (fourth data))) 
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))  
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (not (xor (third data)
+					   	(xor (fourth data) (fifth data))))) ;error-in-x2
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (not (xor (third data)
+			    	      	   	(xor (fourth data) (fifth data)))) ;error-in-x2
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (not (xor (third data)
+					   	(xor (fourth data) (fifth data))))) ;error-in-x2
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+;Theorem: Error in y2 can be corrected
+(defthm error-in-y2
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (xor (second data) (fourth data)))
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))  
+	   	      	       	 (xor (xor (xor (not (xor (third data) (fifth data))) ;error-in-y2
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data)
+					   	(xor (fourth data) (fifth data)))) 
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data))) 
+			    	      (not (xor (third data) (fifth data)))) ;error-in-y2
+	   	      	       	 (xor (xor (xor (not (xor (third data) (fifth data))) ;error-in-y2
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data)
+					   	(xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+
+;Theorem: Error in y3 can be corrected
+(defthm error-in-y3
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (xor (second data) (fourth data))) 
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))  
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(not (xor (fourth data) (sixth data)))) ;error-in-y3
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(not (xor (fourth data) (sixth data)))) ;error-in-y3
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+		
+;Theorem: Error in x4 can be corrected
+(defthm error-in-x4
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+		      
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (xor (second data) (fourth data)))
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))  
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data))) 
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (not (xor (fifth data)
+				      	   	(xor (sixth data) (seventh data)))) ;error-in-x4 
+				      	   (xor (fifth data) (seventh data)))))
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (not (xor (fifth data)
+				      	   	     	  (xor (sixth data) (seventh data))))  ;error-in-x4
+				      	   	(xor (fifth data) (seventh data)))))))
+			(fourth data))))
+		
+;Theorem: Error in y4 can be corrected
+(defthm error-in-y4
+	(implies (and (true-listp data)
+		      (boolean-listp data))
+
+		(equal (or (and (xor (xor (xor (first data) (third data)) 
+		 	    	      	  (xor (second data) (fourth data))) 
+			         (xor (first data)
+		      	       	      (xor (second data) (third data))))  
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data))) 
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (xor (xor (fifth data)
+				      	   	(xor (sixth data) (seventh data))) 
+				      	   (not (xor (fifth data) (seventh data)))))) ;error-in-y4
+					   
+     	   	      	    (and (xor (xor (third data) (xor (fourth data) (fifth data)))
+			    	      (xor (third data) (fifth data)))
+	   	      	       	 (xor (xor (xor (xor (third data) (fifth data))
+				      	   	(xor (fourth data) (sixth data)))
+					   (xor (third data) (xor (fourth data) (fifth data))))
+	  	      	       	      (not (xor (xor (fifth data)
+				      	   	     (xor (sixth data) (seventh data))) 
+				      	   	(not (xor (fifth data)
+						     	  (seventh data))))))));error-in-y4
+			(fourth data))))
+
+(in-theory (enable bit_flip_pair))
