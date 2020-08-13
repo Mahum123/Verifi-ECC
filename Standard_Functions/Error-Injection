@@ -31,8 +31,8 @@
 	(implies (and (>= n 0)
 		      (< n (len lst))
 		      (true-listp lst))
-		 (equal (len lst)
-		 	(len (bit_flip_tlist n lst)))))
+		 (equal (len (bit_flip_tlist n lst))
+		 	(len lst))))
 
 (defthm list-change-after-flip-tlist
 	(implies (and (>= n 0)
@@ -54,5 +54,5 @@
 		      (not (zp n))
 		      (> n 0)
 		      (<= n (len lst)))
-		 (equal (bit_flip_tlist n (cons A lst))
-		 	(cons A (bit_flip_tlist (- n 1) lst)))))
+		 (equal (cons A (bit_flip_tlist (- n 1) lst))
+		 	(bit_flip_tlist n (cons A lst)))))

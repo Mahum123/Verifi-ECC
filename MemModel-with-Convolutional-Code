@@ -79,8 +79,8 @@
 		      (byte-alistp mem)
 		      (equal (len  (load_byte n1 mem)) 8))
 
-		 (equal (load_byte n1 mem)
-		 	(load_byte n2 (store_byte n2 mem (load_byte n1 mem)))))
+		 (equal (load_byte n2 (store_byte n2 mem (load_byte n1 mem)))
+		 	(load_byte n1 mem)))
 	:hints (("Goal" :in-theory (disable load_byte store_byte))))
 
 ;Theorem: Copying-Pasting data from one memory to other doesnot changes data
@@ -190,8 +190,8 @@
 		      (>= n 0)
 		      (< n (len lst))
 		      (alistp lst))
-		 (equal (len lst)
-		 	(len (bit_flip_pair n flg lst)))))
+		 (equal (len (bit_flip_pair n flg lst))
+		 	(len lst))))
 
 (defthm append-bit-flip
 	(implies (and (booleanp flg)
@@ -211,8 +211,8 @@
 		      (not (zp n))
 		      (> n 0)
 		      (< n (len lst)))
-		 (equal (bit_flip_pair n flg (cons (cons A B) lst))
-		 	(cons (cons a b) (bit_flip_pair (- n 1) flg lst)))))
+		 (equal (cons (cons a b) (bit_flip_pair (- n 1) flg lst))
+		 	(bit_flip_pair n flg (cons (cons A B) lst)))))
 
 (defthmd cdr-bitflip
 	(implies (and (booleanp flg)
@@ -239,9 +239,9 @@
 	 (implies (and (alistp lst)
 		       (not (zp n))
 		       (booleanp flg))
-	 	  (equal (bit_flip_pair n flg lst)
-		  	 (cons (car lst)
-			       (bit_flip_pair (- n 1) flg (cdr lst))))))
+	 	  (equal (cons (car lst)
+			       (bit_flip_pair (- n 1) flg (cdr lst)))
+			 (bit_flip_pair n flg lst))))
 
 
 
@@ -454,8 +454,8 @@
 ;Relation between decoder_conv_xor and decode_xor
 (defthmd decode-decoder
 	(implies (alistp code)
-		 (equal (decode_xor code)
-		 	(cdr (decoder_conv_xor code)))))
+		 (equal (cdr (decoder_conv_xor code))
+		 	 (decode_xor code))))
 
 (defthm decode-cons
 	(implies (and (alistp code)
@@ -558,8 +558,7 @@
 	(implies (and (true-listp data)
 		      (boolean-listp data))
 		      
-	(equal (car (decode_xor (encode_xor data (cddr data))))
-	       (or (and (xor (xor (xor (first data) (third data))
+	(equal (or (and (xor (xor (xor (first data) (third data))
 		 	    	  (xor (second data) (fourth data)))
 			     (xor (first data)
 		      	       	  (xor (second data) (third data))))
@@ -575,7 +574,8 @@
 				       (xor (fourth data) (sixth data)))
 			          (xor (third data) (xor (fourth data) (fifth data))))
 	  	      	     (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
-				       (xor (fifth data) (seventh data))))))))))
+				       (xor (fifth data) (seventh data)))))))
+		(car (decode_xor (encode_xor data (cddr data)))))))
 
 (DEFTHMD
  LEMMA-DECODE-FIRST-ELEMENT-CODE
@@ -697,9 +697,9 @@
 	 	       (boolean-listp data)
 		       (not (zp n))
 		       (booleanp flg))
-	 	  (equal (bit_flip_pair n flg (encode_xor data (cddr data)))
-		  	 (cons (car (encode_xor data (cddr data)))
-			       (bit_flip_pair (- n 1) flg (cdr (encode_xor data (cddr data)))))))
+	 	  (equal (cons (car (encode_xor data (cddr data)))
+			       (bit_flip_pair (- n 1) flg (cdr (encode_xor data (cddr data)))))
+			 (bit_flip_pair n flg (encode_xor data (cddr data)))))
 	:hints (("Goal" :use ((:instance bitflip-cons
 	       		     		 (lst (encode_xor data (cddr data))))))))
 
@@ -710,12 +710,12 @@
                    (ZP N)
                    (BOOLEANP FLG)
                    FLG)
-              (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
-                     (CONS (CONS (NOT (XOR (XOR (FIRST DATA) (SECOND DATA))
+              (EQUAL (CONS (CONS (NOT (XOR (XOR (FIRST DATA) (SECOND DATA))
                                            (THIRD DATA)))
                                  (XOR (FIRST DATA) (THIRD DATA)))
-                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))))
-     :INSTRUCTIONS (:PROMOTE (:DV 1 3)
+                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))
+		     (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+     :INSTRUCTIONS (:PROMOTE (:DV 2 3)
                              (:REWRITE ENCODE-1ITERATION)
                              :UP (:REWRITE BIT_FLIP_PAIR)
                              :TOP :PROVE))
@@ -727,12 +727,12 @@
                    (ZP N)
                    (BOOLEANP FLG)
                    (NOT FLG))
-              (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
-                     (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
+              (EQUAL (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
                                            (THIRD DATA))
                                  (NOT (XOR (FIRST DATA) (THIRD DATA))))
-                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))))
-     :INSTRUCTIONS (:PROMOTE (:DV 1 3)
+                           (ENCODE_XOR (CDR DATA) (CDDDR DATA)))
+		     (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+     :INSTRUCTIONS (:PROMOTE (:DV 2 3)
                              (:REWRITE ENCODE-1ITERATION)
                              :UP (:REWRITE BIT_FLIP_PAIR)
                              :TOP :PROVE))
@@ -743,11 +743,11 @@
                        (> (LEN DATA) 3)
                        (not (zp n))
                        (BOOLEANP FLG))
-              	  (EQUAL (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))
-                     	 (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
+              	  (EQUAL (CONS (CONS (XOR (XOR (FIRST DATA) (SECOND DATA))
                                                (THIRD DATA))
                                      (XOR (FIRST DATA) (THIRD DATA)))
-                               (BIT_FLIP_PAIR (- N 1) FLG (cdr (ENCODE_XOR DATA (CDDR DATA)))))))
+                               (BIT_FLIP_PAIR (- N 1) FLG (cdr (ENCODE_XOR DATA (CDDR DATA)))))
+			 (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
 	:hints (("Goal" :use bitflip-cons-encode)))
 
 
@@ -806,8 +806,7 @@
 		       (zp n)
 		       (booleanp flg)
 		       flg)
-	 	  (equal (car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))
-		  	 (or (and (xor (xor (xor (first data) (third data))
+	 	  (equal (or (and (xor (xor (xor (first data) (third data))
 		 	    	      	    (xor (second data) (fourth data)))
 			         	    (not (xor (first data)
 		      	       	      	     	      (xor (second data) (third data)))))
@@ -823,7 +822,8 @@
 				      	   	       (xor (fourth data) (sixth data)))
 					   	  (xor (third data) (xor (fourth data) (fifth data))))
 	  	      	       	             (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
-				      	   	       (xor (fifth data) (seventh data)))))))))
+				      	   	       (xor (fifth data) (seventh data)))))))
+			(car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))))
 	:hints (("Goal" :use bitflip-encode-flg)))
 
 (defthmd car-decode-bitflip-encode-not-flg
@@ -833,8 +833,7 @@
 		       (zp n)
 		       (booleanp flg)
 		       (not flg))
-	 	  (equal (car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))
-		  	 (or (and (xor (xor (not (xor (first data) (third data)))
+	 	  (equal (or (and (xor (xor (not (xor (first data) (third data)))
 		 	    	      	     	 (xor (second data) (fourth data)))
 			         	    (xor (first data)
 		      	       	      	     	  (xor (second data) (third data))))
@@ -850,7 +849,8 @@
 				      	   	       (xor (fourth data) (sixth data)))
 					   	  (xor (third data) (xor (fourth data) (fifth data))))
 	  	      	       	             (not (xor (xor (fifth data) (xor (sixth data) (seventh data)))
-				      	   	       (xor (fifth data) (seventh data)))))))))
+				      	   	       (xor (fifth data) (seventh data)))))))
+			(car (decode_xor (bit_flip_pair n flg (encode_xor data (cddr data)))))))
 	:hints (("Goal" :use bitflip-encode-not-flg)))
 
 (DEFTHMD
@@ -863,10 +863,7 @@
        (ZP N)
        FLG)
   (EQUAL
-   (CONS
-      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
-      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
-   (CONS
+    (CONS
       (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
                          (XOR (SECOND DATA) (FOURTH DATA)))
                     (NOT (XOR (FIRST DATA)
@@ -889,7 +886,10 @@
                                    (XOR (SIXTH DATA) (SEVENTH DATA)))
                               (XOR (FIFTH DATA) (SEVENTH DATA)))))))
       (CDR (DECODE_XOR (BIT_FLIP_PAIR N
-                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))
+    (CONS
+      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))))
  :INSTRUCTIONS (:PROMOTE (:REWRITE CONS-EQUAL)
                          (:DV 2)
                          :S :TOP
@@ -905,9 +905,6 @@
        (ZP N)
        (NOT FLG))
   (EQUAL
-   (CONS
-      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
-      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
    (CONS
       (OR (AND (XOR (XOR (NOT (XOR (FIRST DATA) (THIRD DATA)))
                          (XOR (SECOND DATA) (FOURTH DATA)))
@@ -931,7 +928,10 @@
                                    (XOR (SIXTH DATA) (SEVENTH DATA)))
                               (XOR (FIFTH DATA) (SEVENTH DATA)))))))
       (CDR (DECODE_XOR (BIT_FLIP_PAIR N
-                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))
+     (CONS
+      (CAR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA)))))
+      (CDR (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))))
  :INSTRUCTIONS (:PROMOTE (:REWRITE CONS-EQUAL)
                          (:DV 2)
                          :S :TOP
@@ -949,7 +949,6 @@
        (ZP N)
        FLG)
   (EQUAL
-   (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))
    (CONS
       (OR (AND (XOR (XOR (XOR (FIRST DATA) (THIRD DATA))
                          (XOR (SECOND DATA) (FOURTH DATA)))
@@ -973,7 +972,8 @@
                                    (XOR (SIXTH DATA) (SEVENTH DATA)))
                               (XOR (FIFTH DATA) (SEVENTH DATA)))))))
       (CDR (DECODE_XOR (BIT_FLIP_PAIR N
-                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))
+   (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
  :INSTRUCTIONS ((:USE LEMMA-DECODE-BITFLIP-ENCODE-FLG)
                 :DEMOTE (:DV 1 2)
                 (:REWRITE EQUAL-CONS-CAR-CDR)
@@ -991,7 +991,6 @@
        (ZP N)
        (NOT FLG))
   (EQUAL
-   (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))
    (CONS
       (OR (AND (XOR (XOR (NOT (XOR (FIRST DATA) (THIRD DATA)))
                          (XOR (SECOND DATA) (FOURTH DATA)))
@@ -1015,7 +1014,8 @@
                                    (XOR (SIXTH DATA) (SEVENTH DATA)))
                               (XOR (FIFTH DATA) (SEVENTH DATA)))))))
       (CDR (DECODE_XOR (BIT_FLIP_PAIR N
-                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))))
+                                      FLG (ENCODE_XOR DATA (CDDR DATA))))))
+     (DECODE_XOR (BIT_FLIP_PAIR N FLG (ENCODE_XOR DATA (CDDR DATA))))))
  :INSTRUCTIONS ((:USE LEMMA-DECODE-BITFLIP-ENCODE-NOT-FLG)
                 :DEMOTE (:DV 1 2)
                 (:REWRITE EQUAL-CONS-CAR-CDR)
@@ -1264,4 +1264,3 @@
   :hints (("Goal" :in-theory (disable encode_xor)
 	       		:use ((:instance load-store
 			     		 (byte (ENCODE_XOR DATA (CDDR DATA))))))))
-

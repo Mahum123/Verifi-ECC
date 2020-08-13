@@ -50,8 +50,8 @@
 		      (>= n 0)
 		      (< n (len lst))
 		      (alistp lst))
-		 (equal (len lst)
-		 	(len (bit_flip_pair n flg lst)))))
+		 (equal (len (bit_flip_pair n flg lst))
+		 	(len lst))))
 
 (defthm append-bit-flip
 	(implies (and (booleanp flg)
@@ -71,8 +71,8 @@
 		      (not (zp n))
 		      (> n 0)
 		      (< n (len lst)))
-		 (equal (bit_flip_pair n flg (cons (cons A B) lst))
-		 	(cons (cons a b) (bit_flip_pair (- n 1) flg lst)))))
+		 (equal (cons (cons a b) (bit_flip_pair (- n 1) flg lst))
+		 	(bit_flip_pair n flg (cons (cons A B) lst)))))
 
 (defthmd cdr-bitflip
 	(implies (and (booleanp flg)
@@ -99,6 +99,6 @@
 	 (implies (and (alistp lst)
 		       (not (zp n))
 		       (booleanp flg))
-	 	  (equal (bit_flip_pair n flg lst)
-		  	 (cons (car lst)
-			       (bit_flip_pair (- n 1) flg (cdr lst))))))
+	 	  (equal (cons (car lst)
+			       (bit_flip_pair (- n 1) flg (cdr lst)))
+			 (bit_flip_pair n flg lst))))

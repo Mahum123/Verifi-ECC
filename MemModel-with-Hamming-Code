@@ -79,8 +79,8 @@
 		      (byte-alistp mem)
 		      (equal (len  (load_byte n1 mem)) 8))
 
-		 (equal (load_byte n1 mem)
-		 	(load_byte n2 (store_byte n2 mem (load_byte n1 mem)))))
+		 (equal (load_byte n2 (store_byte n2 mem (load_byte n1 mem)))
+		 	(load_byte n1 mem)))
 	:hints (("Goal" :in-theory (disable load_byte store_byte))))
 
 ;Theorem: Copying-Pasting data from one memory to other doesnot changes data
@@ -160,8 +160,8 @@
 		       :verify-guards nil))
 
        (if (zp n)
-       	   (append (list (not (car lst))) (cdr lst))
-	   (append (list (car lst)) (bit_flip_tlist (- n 1) (cdr lst)))))
+       	   (cons (not (car lst)) (cdr lst))
+	   (cons (car lst) (bit_flip_tlist (- n 1) (cdr lst)))))
 
 ;n: location in codeword
 ;lst: codeword
@@ -184,8 +184,8 @@
 	(implies (and (>= n 0)
 		      (< n (len lst))
 		      (true-listp lst))
-		 (equal (len lst)
-		 	(len (bit_flip_tlist n lst)))))
+		 (equal (len (bit_flip_tlist n lst))
+		 	(len lst))))
 
 (defthm list-change-after-flip-tlist
 	(implies (and (>= n 0)
@@ -207,9 +207,8 @@
 		      (not (zp n))
 		      (> n 0)
 		      (<= n (len lst)))
-		 (equal (bit_flip_tlist n (cons A lst))
-		 	(cons A (bit_flip_tlist (- n 1) lst)))))
-
+		 (equal (cons A (bit_flip_tlist (- n 1) lst))
+		 	(bit_flip_tlist n (cons A lst)))))
 
 
 
@@ -219,26 +218,26 @@
 
 ;HAMMING (7,4) ENCODER
 (defun hamming7-4-encode (x3 x5 x6 x7)
-       (append (list (xor (xor x3 x5) x7))
-       	       (list (xor (xor x3 x6) x7))
-	       (list x3)
-	       (list (xor (xor x5 x6) x7))
-	       (list x5)
-	       (list x6)
-	       (list x7)
-	       (list (xor
-			(xor
-			   (xor
-			      (xor
-				 (xor
-				    (xor
-				       (xor (xor x3 x5) x7)  ;=x1
-				       (xor (xor x3 x6) x7)) ;=x2
-				  x3)
-			      (xor (xor x5 x6) x7))	     ;=x4
-			   x5)
-			x6)
-		     x7))))
+       (cons (xor (xor x3 x5) x7)
+       	     (cons (xor (xor x3 x6) x7)
+	       	   (cons x3
+	       	   	 (cons (xor (xor x5 x6) x7)
+	       		       (cons x5
+	       		       	     (cons x6
+	       			     	   (cons x7
+	       				   	 (cons (xor
+						        (xor
+			   				 (xor
+			      				  (xor
+				 			   (xor
+				    			    (xor
+				       			     (xor (xor x3 x5) x7)   ;=x1
+				       			      (xor (xor x3 x6) x7)) ;=x2
+				  			     x3)
+			      				    (xor (xor x5 x6) x7))   ;=x4
+			   				   x5)
+							  x6)
+		     					 x7) nil)))))))))
 
 ;Parity bits for single-error correction: x1, x2, x4
 ;Parity bit for double-error detection: x8
@@ -344,8 +343,8 @@
 		 	(count_element_mismatch_tlist
 					(hamming7-4-encode x3 x5 x6 x7)
 		       	 	   	(list x1 x2 x3 x4 x5 x6 x7 x8)));single bit flip
-	    	 (equal (list x3 x5 x6 x7)
-			(hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8))))
+	    	 (equal (hamming7-4-decode x1 x2 x3 x4 x5 x6 x7 x8)
+		 	(list x3 x5 x6 x7))))
 			;output will be corrected code
 ;(Weak theorem: only checks for error in parity bit)
 
