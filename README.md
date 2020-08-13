@@ -6,7 +6,7 @@ The files *MemModel-with-Hamming-Code* and *MemModel-with-Convolutional-Code* pr
 
 ## Prerequisite
 
-Before staring, make sure ACL2 theorem prover is installed and running on your system. The instructions for ACL2 installation can be found [here](http://www.cs.utexas.edu/users/moore/acl2/v8-0/HTML/installation/installation.html).
+Before starting, make sure ACL2 theorem prover is installed and running on your system. The instructions for ACL2 installation can be found [here](http://www.cs.utexas.edu/users/moore/acl2/v8-0/HTML/installation/installation.html).
 
 ## Citing the Work
 
