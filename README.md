@@ -9,4 +9,11 @@ The files *MemModel-with-Hamming-Code* and *MemModel-with-Convolutional-Code* pr
 Before starting, make sure ACL2 theorem prover is installed and running on your system. The instructions for ACL2 installation can be found [here](http://www.cs.utexas.edu/users/moore/acl2/v8-0/HTML/installation/installation.html).
 
 ## Citing the Work
-
+@article{naseer2020formal,  
+  title={Formal Verification of ECCs for Memories Using ACL2},  
+  author={Naseer, Mahum and Ahmad, Waqar and Hasan, Osman},  
+  journal={Journal of Electronic Testing},  
+  pages={1--21},  
+  year={2020},  
+  publisher={Springer}  
+}
